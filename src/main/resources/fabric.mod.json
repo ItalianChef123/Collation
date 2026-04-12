@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "collation",
+  "version": "${version}",
+  "name": "Collation",
+  "description": "This is a mod designed to bring together items in your storage system",
+  "authors": [],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/collation/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "com.astralsorceror.collation.client.CollationDataGenerator"
+    ],
+    "client": [
+      "com.astralsorceror.collation.client.CollationClient"
+    ],
+    "main": [
+      "com.astralsorceror.collation.Collation"
+    ]
+  },
+  "mixins": [
+    "collation.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
