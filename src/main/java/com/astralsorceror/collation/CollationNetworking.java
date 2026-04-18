@@ -68,7 +68,6 @@ public class CollationNetworking {
                     int count = buf.readInt();
                     sortedItems.put(item, count);
                 }
-                System.out.println("RECEIVED: " + sortedItems);
 
                 server.execute(() -> {
                     if (player.getWorld().getBlockEntity(pos) instanceof ChestBlockEntity chest) {

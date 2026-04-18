@@ -41,13 +41,9 @@ public class CollationClientNetworking {
                         buf2.writeRegistryValue(Registries.ITEM, entry.getKey());
                         buf2.writeInt(entry.getValue());
                     }
-                    System.out.println("RAW: " + chestItems);
-                    System.out.println("SORTED: " + sorted);
 
                     ClientPlayNetworking.send(CollationNetworking.APPLY_CHEST_SORT, buf2);
                 });
-
-                client.execute(() -> System.out.println("Received chest data: " + chestItems));
             });
     }
 
