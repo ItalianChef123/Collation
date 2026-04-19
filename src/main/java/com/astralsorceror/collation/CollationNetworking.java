@@ -47,7 +47,11 @@ public class CollationNetworking {
                                 int index = -1;
 
                                 for (int j = 0; j < stacks.size(); j++) {
-                                    if (ItemStack.areEqual(stacks.get(j), chestStack)) {
+                                    ItemStack stack = stacks.get(j).copy();
+                                    ItemStack chestStack1 = chestStack.copy();
+                                    stack.setCount(1);
+                                    chestStack1.setCount(1);
+                                    if (ItemStack.areEqual(stack, chestStack1)) {
                                         index = j;
                                         break;
                                     }
