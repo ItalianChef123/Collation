@@ -1,4 +1,5 @@
 {
   "key.collation.category.collation": "Collation",
-  "key.collation.select_chest": "Select Chest"
+  "key.collation.select_chest": "Select Chest",
+  "key.collation.sort_chests": "Sort Chests"
 }
