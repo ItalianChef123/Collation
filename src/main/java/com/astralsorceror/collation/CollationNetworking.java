@@ -3,95 +3,172 @@ package com.astralsorceror.collation;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.entity.ChestBlockEntity;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketByteBuf;
-import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 public class CollationNetworking {
-    public static final Identifier REQUEST_CHEST_DATA =
-        new Identifier("collation", "request_chest_data");
-    public static final Identifier CHEST_DATA_SYNC =
-        new Identifier("collation", "chest_data_sync");
-    public static final Identifier APPLY_CHEST_SORT =
-        new Identifier("collation", "apply_chest_sort");
+    public static final Identifier REQUEST_CHEST_DATA = new Identifier("collation", "request_chest_data");
+    public static final Identifier CHEST_DATA_SYNC = new Identifier("collation", "chest_data_sync");
+    public static final Identifier APPLY_CHEST_SORT = new Identifier("collation", "apply_chest_sort");
 
     public static void registerC2SPackets() {
         ServerPlayNetworking.registerGlobalReceiver(REQUEST_CHEST_DATA,
             (server, player, handler, buf, responseSender) -> {
 
-                BlockPos pos = buf.readBlockPos();
+                List<BlockPos> chestsPos = new ArrayList<>();
+                int numOfChests = buf.readInt();
+
+                for (int i = 0; i < numOfChests; i++) {
+                    chestsPos.add(buf.readBlockPos());
+                }
 
                 server.execute(() -> {
-                    if (player.getWorld().getBlockEntity(pos) instanceof ChestBlockEntity chest) {
 
-                        Map<Item, Integer> chestItems = new HashMap<>();
+                    List<ItemStack> stacks = new ArrayList<>();
+                    List<Integer> amounts = new ArrayList<>();
+                    List<BlockPos> validChests = new ArrayList<>();
 
-                        for (int i = 0; i < chest.size(); i++) {
-                            ItemStack stack = chest.getStack(i);
+                    PacketByteBuf responseBuf = PacketByteBufs.create();
 
-                            if (!stack.isEmpty()) {
-                                chestItems.merge(stack.getItem(), stack.getCount(), Integer::sum);
+                    for (BlockPos pos : chestsPos) {
+
+                        if (player.getWorld().getBlockEntity(pos) instanceof ChestBlockEntity chest) {
+
+                            validChests.add(pos);
+
+                            for (int i = 0; i < chest.size(); i++) {
+
+                                ItemStack chestStack = chest.getStack(i);
+                                if (chestStack.isEmpty()) continue;
+
+                                int index = -1;
+
+                                for (int j = 0; j < stacks.size(); j++) {
+                                    if (ItemStack.areEqual(stacks.get(j), chestStack)) {
+                                        index = j;
+                                        break;
+                                    }
+                                }
+
+                                if (index != -1) {
+                                    amounts.set(index,
+                                        amounts.get(index) + chestStack.getCount());
+                                } else {
+                                    stacks.add(chestStack.copy());
+                                    amounts.add(chestStack.getCount());
+                                }
                             }
                         }
-                        PacketByteBuf responseBuf = PacketByteBufs.create();
-
-                        responseBuf.writeBlockPos(pos);
-                        responseBuf.writeInt(chestItems.size());
-
-                        for (Map.Entry<Item, Integer> entry : chestItems.entrySet()) {
-                            responseBuf.writeItemStack(new ItemStack(entry.getKey()));
-                            responseBuf.writeInt(entry.getValue());
-                        }
-
-                        ServerPlayNetworking.send(player, CHEST_DATA_SYNC, responseBuf);
                     }
+
+                    responseBuf.writeInt(validChests.size());
+
+                    for (BlockPos pos : validChests) {
+                        responseBuf.writeBlockPos(pos);
+                    }
+
+                    responseBuf.writeInt(stacks.size());
+
+                    for (ItemStack stack : stacks) {
+                        responseBuf.writeItemStack(stack);
+                    }
+
+                    for (int amount : amounts) {
+                        responseBuf.writeInt(amount);
+                    }
+
+                    ServerPlayNetworking.send(player, CHEST_DATA_SYNC, responseBuf);
                 });
             });
 
         ServerPlayNetworking.registerGlobalReceiver(APPLY_CHEST_SORT,
             (server, player, handler, buf, responseSender) -> {
 
-                BlockPos pos = buf.readBlockPos();
+                int numOfChests = buf.readInt();
 
-                int size = buf.readInt();
-                Map<Item, Integer> sortedItems = new LinkedHashMap<>();
+                List<BlockPos> chestsPos = new ArrayList<>();
+                for (int i = 0; i < numOfChests; i++) {
+                    chestsPos.add(buf.readBlockPos());
+                }
 
-                for (int i = 0; i < size; i++) {
-                    Item item = buf.readRegistryValue(Registries.ITEM);
-                    int count = buf.readInt();
-                    sortedItems.put(item, count);
+                int numOfItems = buf.readInt();
+
+                List<ItemStack> items = new ArrayList<>();
+                List<Integer> amounts = new ArrayList<>();
+
+                for (int i = 0; i < numOfItems; i++) {
+                    items.add(buf.readItemStack());
+                }
+
+                for (int i = 0; i < numOfItems; i++) {
+                    amounts.add(buf.readInt());
                 }
 
                 server.execute(() -> {
-                    if (player.getWorld().getBlockEntity(pos) instanceof ChestBlockEntity chest) {
 
-                        for (int i = 0; i < chest.size(); i++) {
-                            chest.setStack(i, ItemStack.EMPTY);
+                    for (BlockPos pos : chestsPos) {
+                        if (player.getWorld().getBlockEntity(pos) instanceof ChestBlockEntity chest) {
+                            for (int i = 0; i < chest.size(); i++) {
+                                chest.setStack(i, ItemStack.EMPTY);
+                            }
+                            chest.markDirty();
+                        }
+                    }
+
+                    int chestIndex = 0;
+                    int slotIndex = 0;
+
+                    ItemStack current = null;
+                    int remaining = 0;
+
+                    int itemIndex = 0;
+
+                    if (numOfItems > 0) {
+                        current = items.get(0).copy();
+                        remaining = amounts.get(0);
+                    }
+
+                    while (current != null && chestIndex < chestsPos.size()) {
+
+                        BlockPos pos = chestsPos.get(chestIndex);
+
+                        if (!(player.getWorld().getBlockEntity(pos) instanceof ChestBlockEntity chest)) {
+                            chestIndex++;
+                            continue;
                         }
 
-                        int slot = 0;
+                        while (slotIndex < chest.size() && current != null) {
 
-                        for (Map.Entry<Item, Integer> entry : sortedItems.entrySet()) {
-                            int remaining = entry.getValue();
+                            int maxStack = current.getMaxCount();
+                            int toPlace = Math.min(remaining, maxStack);
 
-                            while (remaining > 0 && slot < chest.size()) {
-                                int stackSize = Math.min(remaining, entry.getKey().getMaxCount());
+                            ItemStack placed = current.copy();
+                            placed.setCount(toPlace);
 
-                                chest.setStack(slot, new ItemStack(entry.getKey(), stackSize));
+                            chest.setStack(slotIndex, placed);
 
-                                remaining -= stackSize;
-                                slot++;
+                            remaining -= toPlace;
+                            slotIndex++;
+
+                            if (remaining <= 0) {
+                                itemIndex++;
+
+                                if (itemIndex < numOfItems) {
+                                    current = items.get(itemIndex).copy();
+                                    remaining = amounts.get(itemIndex);
+                                } else {
+                                    current = null;
+                                }
                             }
                         }
 
                         chest.markDirty();
+
+                        chestIndex++;
+                        slotIndex = 0;
                     }
                 });
             });

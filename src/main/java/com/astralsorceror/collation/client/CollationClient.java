@@ -9,5 +9,6 @@ public class CollationClient implements ClientModInitializer {
     public void onInitializeClient() {
         KeyInputHandler.register();
         CollationClientNetworking.registerS2CPackets();
+        ChestRenderer.init();
     }
 }
