@@ -3,9 +3,11 @@ package com.astralsorceror.collation.client;
 import com.astralsorceror.collation.CollationNetworking;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketByteBuf;
 
+import net.minecraft.util.Pair;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.*;
@@ -40,44 +42,40 @@ public class CollationClientNetworking {
 
                 client.execute(() -> {
 
-                    List<ItemStack> keys = new ArrayList<>();
-                    List<Integer> values = new ArrayList<>();
+                    Map<Item, List<Pair<ItemStack, Integer>>> grouped = new HashMap<>();
 
                     for (int i = 0; i < numOfStacks; i++) {
-
                         ItemStack stack = stacks.get(i);
                         int amount = amounts.get(i);
 
-                        int index = -1;
+                        Item item = stack.getItem();
 
-                        for (int j = 0; j < keys.size(); j++) {
-                            if (ItemStack.areEqual(keys.get(j), stack)) {
-                                index = j;
-                                break;
-                            }
-                        }
-
-                        if (index != -1) {
-                            values.set(index, values.get(index) + amount);
-                        } else {
-                            keys.add(stack.copy());
-                            values.add(amount);
-                        }
+                        grouped.computeIfAbsent(item, k -> new ArrayList<>())
+                            .add(new Pair<>(stack.copy(), amount));
                     }
 
-                    List<Integer> order = new ArrayList<>();
-                    for (int i = 0; i < keys.size(); i++) {
-                        order.add(i);
+                    Map<Item, Integer> totals = new HashMap<>();
+
+                    for (Map.Entry<Item, List<Pair<ItemStack, Integer>>> entry : grouped.entrySet()) {
+                        int sum = entry.getValue().stream()
+                            .mapToInt(Pair::getRight)
+                            .sum();
+
+                        totals.put(entry.getKey(), sum);
                     }
 
-                    order.sort((a, b) -> Integer.compare(values.get(b), values.get(a)));
+                    List<Item> order = new ArrayList<>(grouped.keySet());
+
+                    order.sort((a, b) -> Integer.compare(totals.get(b), totals.get(a)));
 
                     List<ItemStack> sortedItems = new ArrayList<>();
                     List<Integer> sortedAmounts = new ArrayList<>();
 
-                    for (int i : order) {
-                        sortedItems.add(keys.get(i));
-                        sortedAmounts.add(values.get(i));
+                    for (Item item : order) {
+                        for (Pair<ItemStack, Integer> pair : grouped.get(item)) {
+                            sortedItems.add(pair.getLeft());
+                            sortedAmounts.add(pair.getRight());
+                        }
                     }
 
                     PacketByteBuf buf2 = PacketByteBufs.create();
