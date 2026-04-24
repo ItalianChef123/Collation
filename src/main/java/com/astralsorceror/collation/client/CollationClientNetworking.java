@@ -66,7 +66,15 @@ public class CollationClientNetworking {
 
                     List<Item> order = new ArrayList<>(grouped.keySet());
 
-                    order.sort((a, b) -> Integer.compare(totals.get(b), totals.get(a)));
+                    order.sort((a, b) -> {
+                        int quantityCompare = Integer.compare(totals.get(b), totals.get(a));
+                        if (quantityCompare != 0) {
+                            return quantityCompare;
+                        }
+                        String nameA = a.getName().getString();
+                        String nameB = b.getName().getString();
+                        return nameA.compareToIgnoreCase(nameB);
+                    });
 
                     List<ItemStack> sortedItems = new ArrayList<>();
                     List<Integer> sortedAmounts = new ArrayList<>();
